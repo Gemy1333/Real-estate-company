@@ -1,0 +1,107 @@
+create first procedure
+
+CREATE OR REPLACE PROCEDURE UPD_PAY_INSTAL_NO
+IS
+        CURSOR CONTRACT_CURSOR IS
+            SELECT contract_id, CONTRACT_STARTDATE, CONTRACT_ENDDATE, CONTRACT_PAYMENT_TYPE
+            FROM CONTRACTS;
+            
+            CONTRACT_DURATION number(10);
+            
+BEGIN
+        FOR CON_RECORD IN CONTRACT_CURSOR LOOP
+        CONTRACT_DURATION := MONTHS_BETWEEN(CON_RECORD.CONTRACT_ENDDATE , CON_RECORD.CONTRACT_STARTDATE);
+           
+        IF CON_RECORD.CONTRACT_PAYMENT_TYPE = 'ANNUAL' THEN
+            UPDATE CONTRACTS
+            SET PAYMENTS_INSTALLMENTS_NO = CONTRACT_DURATION/12
+            WHERE contract_id = CON_RECORD.contract_id;
+
+        ELSIF CON_RECORD.CONTRACT_PAYMENT_TYPE = 'QUARTER' THEN
+                    UPDATE CONTRACTS
+                    SET PAYMENTS_INSTALLMENTS_NO = CONTRACT_DURATION/3
+                    WHERE contract_id = CON_RECORD.contract_id;
+                    
+        ELSIF CON_RECORD.CONTRACT_PAYMENT_TYPE = 'MONTHLY' THEN
+                    UPDATE CONTRACTS
+                    SET PAYMENTS_INSTALLMENTS_NO = CONTRACT_DURATION/1
+                    WHERE contract_id = CON_RECORD.contract_id;
+            
+        ELSE    UPDATE CONTRACTS
+                    SET PAYMENTS_INSTALLMENTS_NO = CONTRACT_DURATION/6
+                    WHERE contract_id = CON_RECORD.contract_id;                  
+        END IF;
+        END LOOP;
+END;
+
+-------------------------------------------------------------------
+call procedure 
+
+declare
+
+begin
+        UPD_PAY_INSTAL_NO;
+end;
+----------------------------------------------------------------------
+
+create second procedure
+
+ create or replace procedure insert_payment
+is
+      cursor contracts_cursor is 
+      select * from contracts;
+                
+       v_start_date date;
+       v_ins_amount number(10,2);     
+ BEGIN 
+           for contracts_record in contracts_cursor loop
+             v_start_date := contracts_record.CONTRACT_STARTDATE; 
+             
+               if contracts_record.CONTRACT_DEPOSIT_FEES is not null then 
+                       v_ins_amount := ( contracts_record.CONTRACT_TOTAL_FEES - contracts_record.CONTRACT_DEPOSIT_FEES) / contracts_record.PAYMENTS_INSTALLMENTS_NO;
+               else 
+                       v_ins_amount := contracts_record.CONTRACT_TOTAL_FEES / contracts_record.PAYMENTS_INSTALLMENTS_NO;
+               end if;
+                          
+                            
+                if contracts_record.CONTRACT_PAYMENT_TYPE = 'ANNUAL' then               
+                   while v_start_date < contracts_record.CONTRACT_ENDDATE loop 
+                                                
+                            insert into INSTALLMENTS_PAID ( INSTALLMENT_ID, CONTRACT_ID, INSTALLMENT_DATE, INSTALLMENT_AMOUNT, PAID )
+                            values  ( INSTALLMENTS_PAID_SEQ.nextval , contracts_record.CONTRACT_ID , v_start_date , v_ins_amount, 0 );
+                            v_start_date := add_months (v_start_date, 12 ); 
+                   end loop;
+                 
+               elsif contracts_record.CONTRACT_PAYMENT_TYPE = 'MONTHLY' then               
+                   while v_start_date < contracts_record.CONTRACT_ENDDATE loop 
+                                                
+                            insert into INSTALLMENTS_PAID ( INSTALLMENT_ID, CONTRACT_ID, INSTALLMENT_DATE, INSTALLMENT_AMOUNT, PAID )
+                            values  ( INSTALLMENTS_PAID_SEQ.nextval , contracts_record.contract_id , v_start_date , v_ins_amount, 0 );
+                            v_start_date := add_months (v_start_date, 1);
+                   end loop;     
+               elsif contracts_record.CONTRACT_PAYMENT_TYPE = 'HALF_ANNUAL' then               
+                   while v_start_date < contracts_record.CONTRACT_ENDDATE loop 
+                                                
+                            insert into INSTALLMENTS_PAID ( INSTALLMENT_ID, CONTRACT_ID, INSTALLMENT_DATE, INSTALLMENT_AMOUNT, PAID )
+                            values  ( INSTALLMENTS_PAID_SEQ.nextval , contracts_record.contract_id , v_start_date , v_ins_amount, 0 );
+                            v_start_date := add_months (v_start_date, 6 );
+                   end loop;      
+               elsif contracts_record.CONTRACT_PAYMENT_TYPE = 'QUARTER' then               
+                   while v_start_date < contracts_record.CONTRACT_ENDDATE loop 
+                                                
+                            insert into INSTALLMENTS_PAID ( INSTALLMENT_ID, CONTRACT_ID, INSTALLMENT_DATE, INSTALLMENT_AMOUNT, PAID )
+                            values  ( INSTALLMENTS_PAID_SEQ.nextval , contracts_record.contract_id , v_start_date , v_ins_amount, 0 );
+                           v_start_date := add_months (v_start_date, 3 );  
+                   end loop; 
+               end if;
+           end loop ;
+                 
+END;
+------------------------------------------------------------------------
+call procedure
+
+declare
+
+begin
+        insert_payment;
+end;
